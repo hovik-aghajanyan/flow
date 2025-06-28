@@ -1,9 +1,10 @@
+// Final fixed version with smart animation trigger and working animation
+
 import React, { useRef, useEffect, useState } from "react";
 import styles from "./index.module.css";
 
 const INITIAL_WIDTH = 1000;
 const INITIAL_HEIGHT = 700;
-
 const BIG_RADIUS = 40;
 const SMALL_RADIUS = 25;
 
@@ -46,80 +47,84 @@ const graphData = [
 
 export default function CanvasGraph() {
     const canvasRef = useRef(null);
-    const [expandedNodes, setExpandedNodes] = useState([]);
     const [positions, setPositions] = useState({});
-    const [animationProgress, setAnimationProgress] = useState(1);
-    const [animatedFromNodeId, setAnimatedFromNodeId] = useState(null);
     const [selectedPath, setSelectedPath] = useState([]);
+    const [expandedNodes, setExpandedNodes] = useState([]);
+    const [animatingNodes, setAnimatingNodes] = useState([]);
+    const [animationProgress, setAnimationProgress] = useState(1);
     const [zoom, setZoom] = useState(1);
 
-    function findInSubtree(node, id, path = []) {
-        if (node.id === id) return { node, path: [...path, node.id] };
-        for (const child of node.children || []) {
-            const result = findInSubtree(child, id, [...path, node.id]);
-            if (result) return result;
+    const duration = 500;
+
+    function findNodeAndPath(id, nodes = graphData, path = []) {
+        for (let node of nodes) {
+            if (node.id === id) return { node, path: [...path, node.id] };
+            if (node.children) {
+                const res = findNodeAndPath(id, node.children, [...path, node.id]);
+                if (res) return res;
+            }
         }
         return null;
     }
 
-    useEffect(() => {
+    function layoutNodes(progress = 1) {
         const layout = {};
-        const topLevelSpacing = 400;
+        const topSpacing = 400;
         const childSpacing = 120;
         const verticalSpacing = 150;
 
-        function layoutChildren(nodeId, x, y) {
-            const node = findInSubtree({ id: "root", children: graphData }, nodeId)?.node;
-            if (!node || !node.children?.length) return;
+        function layoutChildren(node, x, y) {
+            const children = node.children || [];
+            const count = children.length;
+            children.forEach((child, i) => {
+                const cx = x - ((count - 1) * childSpacing) / 2 + i * childSpacing;
+                const cy = y + verticalSpacing;
+                let finalX = cx;
+                let finalY = cy;
 
-            const childCount = node.children.length;
-            node.children.forEach((child, j) => {
-                const finalX = x - ((childCount - 1) * childSpacing) / 2 + j * childSpacing;
-                const finalY = y + verticalSpacing;
-                const shouldAnimate = animatedFromNodeId === nodeId;
-                layout[child.id] = {
-                    x: shouldAnimate ? positions[nodeId]?.x + (finalX - positions[nodeId].x) * animationProgress : finalX,
-                    y: shouldAnimate ? positions[nodeId]?.y + (finalY - positions[nodeId].y) * animationProgress : finalY,
-                    node: child,
-                };
+                if (animatingNodes.includes(child.id) && positions[node.id]) {
+                    const parentPos = positions[node.id];
+                    finalX = parentPos.x + (cx - parentPos.x) * progress;
+                    finalY = parentPos.y + (cy - parentPos.y) * progress;
+                }
+
+                layout[child.id] = { x: finalX, y: finalY, node: child };
+
                 if (expandedNodes.includes(child.id)) {
-                    layoutChildren(child.id, finalX, finalY);
+                    layoutChildren(child, cx, cy);
                 }
             });
         }
 
-        graphData.forEach((root, i) => {
-            const rootX = INITIAL_WIDTH / 2 - ((graphData.length - 1) * topLevelSpacing) / 2 + i * topLevelSpacing;
-            const rootY = 100;
-            layout[root.id] = { x: rootX, y: rootY, node: root };
-            if (expandedNodes.includes(root.id)) {
-                layoutChildren(root.id, rootX, rootY);
+        graphData.forEach((node, i) => {
+            const x = INITIAL_WIDTH / 2 - ((graphData.length - 1) * topSpacing) / 2 + i * topSpacing;
+            const y = 100;
+            layout[node.id] = { x, y, node };
+            if (expandedNodes.includes(node.id)) {
+                layoutChildren(node, x, y);
             }
         });
 
-        setPositions(layout);
-    }, [expandedNodes, animationProgress, animatedFromNodeId]);
+        return layout;
+    }
 
     useEffect(() => {
         let frameId;
-        let start;
-        if (animatedFromNodeId) {
-            start = null;
-            function animate(ts) {
-                if (!start) start = ts;
-                const progress = Math.min((ts - start) / 500, 1);
-                setAnimationProgress(progress);
-                if (progress < 1) frameId = requestAnimationFrame(animate);
-            }
-            frameId = requestAnimationFrame(animate);
-        } else {
-            setAnimationProgress(1);
+        if (animationProgress < 1) {
+            frameId = requestAnimationFrame((ts) => {
+                const newProgress = Math.min(animationProgress + 0.05, 1);
+                setAnimationProgress(newProgress);
+                setPositions(layoutNodes(newProgress));
+            });
         }
         return () => cancelAnimationFrame(frameId);
-    }, [animatedFromNodeId]);
+    }, [animationProgress]);
 
     useEffect(() => {
-        if (!canvasRef.current) return;
+        setPositions(layoutNodes(animationProgress));
+    }, [expandedNodes, animatingNodes]);
+
+    useEffect(() => {
         const ctx = canvasRef.current.getContext("2d");
         ctx.clearRect(0, 0, INITIAL_WIDTH, INITIAL_HEIGHT);
         ctx.save();
@@ -127,21 +132,20 @@ export default function CanvasGraph() {
 
         Object.values(positions).forEach(({ node, x, y }) => {
             (node.children || []).forEach((child) => {
-                if (positions[child.id]) {
-                    const highlight = selectedPath.includes(node.id) && selectedPath.includes(child.id);
-                    drawLine(ctx, { x, y }, positions[child.id], highlight);
-                }
+                if (!positions[child.id]) return;
+                const { x: cx, y: cy } = positions[child.id];
+                drawLine(ctx, { x, y }, { x: cx, y: cy }, selectedPath.includes(node.id) && selectedPath.includes(child.id));
             });
         });
 
-        Object.values(positions).forEach(({ node, x, y }) => {
-            const radius = selectedPath.includes(node.id) ? BIG_RADIUS : SMALL_RADIUS;
-            const isSelected = selectedPath.includes(node.id);
-            drawNode(ctx, { x, y, label: node.label, isSelected }, radius);
+        Object.entries(positions).forEach(([id, { node, x, y }]) => {
+            const selected = selectedPath.includes(node.id);
+            const radius = selected ? BIG_RADIUS : SMALL_RADIUS;
+            drawNode(ctx, { x, y, label: node.label, isSelected: selected }, radius);
         });
 
         ctx.restore();
-    }, [positions, animationProgress, selectedPath, zoom]);
+    }, [positions, selectedPath, zoom]);
 
     function drawNode(ctx, { x, y, label, isSelected }, radius) {
         ctx.save();
@@ -176,46 +180,43 @@ export default function CanvasGraph() {
         ctx.strokeStyle = highlight ? "#e67e22" : "#555";
         ctx.lineWidth = highlight ? 3 : 2;
         ctx.stroke();
-        drawArrowhead(ctx, endX, endY, angle, highlight);
-    }
 
-    function drawArrowhead(ctx, x, y, angle, highlight) {
         const size = 8;
         ctx.beginPath();
         ctx.fillStyle = highlight ? "#e67e22" : "#555";
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - size * Math.cos(angle - Math.PI / 6), y - size * Math.sin(angle - Math.PI / 6));
-        ctx.lineTo(x - size * Math.cos(angle + Math.PI / 6), y - size * Math.sin(angle + Math.PI / 6));
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(endX - size * Math.cos(angle - Math.PI / 6), endY - size * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(endX - size * Math.cos(angle + Math.PI / 6), endY - size * Math.sin(angle + Math.PI / 6));
         ctx.closePath();
         ctx.fill();
-    }
-
-    function handleClick(event) {
-        if (!positions) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        const clickX = (event.clientX - rect.left) / zoom;
-        const clickY = (event.clientY - rect.top) / zoom;
-
-        for (const pos of Object.values(positions)) {
-            const radius = selectedPath.includes(pos.node.id) ? BIG_RADIUS : SMALL_RADIUS;
-            if (isPointInCircle(clickX, clickY, pos.x, pos.y, radius)) {
-                const result = findInSubtree({ id: "root", children: graphData }, pos.node.id);
-                if (result) {
-                    setSelectedPath(result.path);
-                    setAnimatedFromNodeId(pos.node.id);
-                    if (result.node.children.length > 0 && !expandedNodes.includes(pos.node.id)) {
-                        setExpandedNodes([...expandedNodes, pos.node.id]);
-                    }
-                }
-                return;
-            }
-        }
     }
 
     function isPointInCircle(px, py, cx, cy, r) {
         const dx = px - cx;
         const dy = py - cy;
         return dx * dx + dy * dy <= r * r;
+    }
+
+    function handleClick(event) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const clickX = (event.clientX - rect.left) / zoom;
+        const clickY = (event.clientY - rect.top) / zoom;
+
+        for (const [id, { x, y, node }] of Object.entries(positions)) {
+            const radius = selectedPath.includes(id) ? BIG_RADIUS : SMALL_RADIUS;
+            if (isPointInCircle(clickX, clickY, x, y, radius)) {
+                const result = findNodeAndPath(id);
+                if (result) {
+                    setSelectedPath(result.path);
+                    if (!expandedNodes.includes(id) && result.node.children.length > 0) {
+                        setAnimatingNodes(result.node.children.map((c) => c.id));
+                        setAnimationProgress(0);
+                        setExpandedNodes([...expandedNodes, id]);
+                    }
+                }
+                return;
+            }
+        }
     }
 
     return (
