@@ -8,7 +8,9 @@
 export function findNodeAndPath({id, nodes, path = []}) {
     for (const node of nodes) {
         // if we found the node, return it with full path
-        if (node.id === id) return { node, path: [...path, node.id] };
+        if (node.id === id) {
+            return {node, path: [...path, node.id]};
+        }
         // otherwise, search in children recursively
         if (node.children) {
             const res = findNodeAndPath({id, nodes: node.children, path: [...path, node.id]});

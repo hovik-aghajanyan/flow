@@ -6,9 +6,9 @@ import {findNodeAndPath} from "../../../../helpers/index.js";
 
 const INITIAL_WIDTH = 800;
 const INITIAL_HEIGHT = 600;
-const BIG_RADIUS = 35;
+const BIG_RADIUS = 30;
 const SMALL_RADIUS = 25;
-const ANIMATION_STEP = 0.1;
+const ANIMATION_STEP = 0.05;
 
 
 
@@ -66,17 +66,22 @@ export default function CanvasGraph() {
                 // store computed position
                 layout[child.id] = { x: fx, y: fy, node: child };
                 // if this child is expanded, recurse deeper
-                if (expandedNodes.includes(child.id)) layoutChildren(child, cx, cy);
+                if (expandedNodes.includes(child.id)) {
+                    layoutChildren(child, cx, cy)
+                }
             });
         }
 
         // layout root-level nodes horizontally
         graphData.forEach((node, i) => {
+            // Compute x-coordinate for node i
             const x = INITIAL_WIDTH / 2 - ((graphData.length - 1) * topSpacing) / 2 + i * topSpacing;
             const y = 100; // fixed top margin
             layout[node.id] = { x, y, node };
             // if expanded, layout its children
-            if (expandedNodes.includes(node.id)) layoutChildren(node, x, y);
+            if (expandedNodes.includes(node.id)) {
+                layoutChildren(node, x, y)
+            }
         });
 
         return layout;
@@ -98,7 +103,9 @@ export default function CanvasGraph() {
                 setAnimationProgress(next);
                 setPositions(layoutNodes(next));
                 // clear animatingNodes when done
-                if (next === 1) setAnimatingNodes([]);
+                if (next === 1) {
+                    setAnimatingNodes([]);
+                }
             });
             return () => cancelAnimationFrame(frame);
         }
@@ -112,7 +119,9 @@ export default function CanvasGraph() {
     // draw loop: runs when positions, selectedPath, zoom, or offset change
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        if (!canvas) {
+            return;
+        }
         const ctx = canvas.getContext("2d");
         // clear entire canvas
         ctx.clearRect(0, 0, INITIAL_WIDTH, INITIAL_HEIGHT);
@@ -134,7 +143,10 @@ export default function CanvasGraph() {
         });
 
         // draw nodes on top of edges
+        // Converts your positions map ({ nodeId: { x, y, node } }) into an array of [id, { x, y, node }] pairs.
         Object.entries(positions)
+            // For each entry, you check whether its id is in the selectedPath array.
+            // selectedPath.includes(a) returns true or false, which in numeric context becomes 1 or 0.
             .sort(([a], [b]) => selectedPath.includes(a) - selectedPath.includes(b)) // draw selected last
             .forEach(([id, { node, x, y }]) => {
                 const isSelected = selectedPath.includes(id);
@@ -232,9 +244,13 @@ export default function CanvasGraph() {
             const r = selectedPath.includes(id) ? BIG_RADIUS : SMALL_RADIUS;
             if ((cx - x) ** 2 + (cy - y) ** 2 <= r * r) {
                 // skip if already expanded
-                if (expandedNodes.includes(id)) return;
+                if (expandedNodes.includes(id)) {
+                    return;
+                }
                 const res = findNodeAndPath({id, nodes: graphData});
-                if (!res) return;
+                if (!res) {
+                    return;
+                }
                 setSelectedPath(res.path);
                 setExpandedNodes(res.path);
                 setAnimatingNodes(res.node.children.map(c => c.id));
@@ -250,7 +266,9 @@ export default function CanvasGraph() {
         lastMouse.current = { x: e.clientX, y: e.clientY };
     }
     function handleMouseMove(e) {
-        if (!isDragging.current) return;
+        if (!isDragging.current) {
+            return;
+        }
         const dx = e.clientX - lastMouse.current.x;
         const dy = e.clientY - lastMouse.current.y;
         setOffset(o => ({ x: o.x + dx, y: o.y + dy }));
