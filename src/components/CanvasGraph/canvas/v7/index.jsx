@@ -1,12 +1,16 @@
 import React, { useRef, useState, useEffect } from "react";
 import graphData from "./data";
 import styles from "./index.module.css";
+import useStaticCallback from "../../../../hooks/useStaticCallback.js";
+import {findNodeAndPath} from "../../../../helpers/index.js";
 
 const INITIAL_WIDTH = 800;
 const INITIAL_HEIGHT = 600;
-const BIG_RADIUS = 40;
+const BIG_RADIUS = 35;
 const SMALL_RADIUS = 25;
 const ANIMATION_STEP = 0.1;
+
+
 
 // CanvasGraph renders an interactive tree graph on an HTML canvas
 export default function CanvasGraph() {
@@ -30,37 +34,18 @@ export default function CanvasGraph() {
     const isDragging = useRef(false);
     const lastMouse = useRef({ x: 0, y: 0 });
 
-    /**
-     * Recursively search for node by ID and build path
-     * @param {string} id - target node ID
-     * @param {Array} nodes - list of nodes to search
-     * @param {Array} path - accumulated path of IDs
-     * @returns {{node: Object, path: string[]} | null}
-     */
-    function findNodeAndPath(id, nodes = graphData, path = []) {
-        for (const node of nodes) {
-            // if we found the node, return it with full path
-            if (node.id === id) return { node, path: [...path, node.id] };
-            // otherwise, search in children recursively
-            if (node.children) {
-                const res = findNodeAndPath(id, node.children, [...path, node.id]);
-                if (res) return res;
-            }
-        }
-        // not found
-        return null;
-    }
+
 
     /**
      * Compute x/y layout for all nodes, applying animation interpolation
      * @param {number} progress - animation progress [0,1]
      * @returns {Object} layout mapping
      */
-    function layoutNodes(progress = 1) {
+    const layoutNodes = useStaticCallback((progress = 1) => {
         const layout = {};
-        const topSpacing = 200;        // horizontal space between top-level nodes
-        const childSpacing = 120;      // horizontal space between siblings
-        const verticalSpacing = 150;   // vertical space between levels
+        const topSpacing = 100;        // horizontal space between top-level nodes
+        const childSpacing = 85;      // horizontal space between siblings
+        const verticalSpacing = 125;   // vertical space between levels
 
         // helper to layout children of a given node
         function layoutChildren(node, x, y) {
@@ -95,14 +80,15 @@ export default function CanvasGraph() {
         });
 
         return layout;
-    }
+    });
 
     // initialize layout on mount
+    // run once on mount
     useEffect(() => {
         setSelectedPath([]);
         setExpandedNodes([]);
         setPositions(layoutNodes(1));
-    }, []); // no dependencies: run once on mount
+    }, [layoutNodes]);
 
     // drive animation frames when animationProgress < 1
     useEffect(() => {
@@ -116,12 +102,12 @@ export default function CanvasGraph() {
             });
             return () => cancelAnimationFrame(frame);
         }
-    }, [animationProgress, animatingNodes]); // re-run when progress or animatingNodes changes
+    }, [animationProgress, animatingNodes, layoutNodes]); // re-run when progress or animatingNodes changes
 
     // update layout immediately when expandedNodes changes
     useEffect(() => {
         setPositions(layoutNodes(1));
-    }, [expandedNodes]);
+    }, [expandedNodes, layoutNodes]);
 
     // draw loop: runs when positions, selectedPath, zoom, or offset change
     useEffect(() => {
@@ -247,7 +233,7 @@ export default function CanvasGraph() {
             if ((cx - x) ** 2 + (cy - y) ** 2 <= r * r) {
                 // skip if already expanded
                 if (expandedNodes.includes(id)) return;
-                const res = findNodeAndPath(id);
+                const res = findNodeAndPath({id, nodes: graphData});
                 if (!res) return;
                 setSelectedPath(res.path);
                 setExpandedNodes(res.path);
