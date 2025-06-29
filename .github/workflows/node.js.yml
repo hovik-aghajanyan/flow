@@ -29,5 +29,5 @@ jobs:
     - run: npm ci
     - run: npm run build --if-present
     - name: Deploy GitHub Pages site
-    - uses: actions/deploy-pages@v4.0.5
+      uses: actions/deploy-pages@v4.0.5
     
