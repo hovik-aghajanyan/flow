@@ -197,6 +197,8 @@ export default function CanvasGraph() {
         for (const [id, { x, y, node }] of Object.entries(positions)) {
             const r = selectedPath.includes(id) ? BIG_RADIUS : SMALL_RADIUS;
             if ((cx - x) ** 2 + (cy - y) ** 2 <= r * r) {
+                // If already expanded, do nothing
+                if (expandedNodes.includes(id)) return;
                 const res = findNodeAndPath(id);
                 if (!res) return;
                 setSelectedPath(res.path);
