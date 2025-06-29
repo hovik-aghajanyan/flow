@@ -1,7 +1,8 @@
 import React, {useState} from 'react';
-import CanvasBoard from './components/CanvasBoard/index.jsx';
-import ReactFlowBoard from "./components/ReactFlowBoard";
-import CanvasGraph from "./components/CanvasGraph/canvas/v7";
+// import CanvasBoard from './components/CanvasBoard';
+// import ReactFlowBoard from "./components/ReactFlowBoard";
+// import CanvasGraph from "./components/CanvasGraph/canvas/v7";
+import CanvasGraph from "./components/CanvasGraph/force-graph-2D";
 
 const App = () => {
     const [selectedNode, setSelectedNode] = useState(null);
