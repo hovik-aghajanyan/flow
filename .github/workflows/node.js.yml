@@ -23,14 +23,27 @@ jobs:
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    - run: npm ci
-    - run: npm run build --if-present
-    - name: Deploy GitHub Pages site
-      uses: actions/deploy-pages@v4.0.5
+     - uses: actions/checkout@v4
+
+     - name: Use Node.js
+       uses: actions/setup-node@v4
+       with:
+         node-version: '20'
     
+     - run: npm ci
+     - run: npm run build
+    
+      # Adjust the directory below ('dist' or 'build') to your actual build output
+     - name: Upload build output as artifact
+       uses: actions/upload-artifact@v4
+       with:
+         name: build-output
+         path: dist
+    
+     - name: Deploy to GitHub Pages
+       if: github.ref == 'refs/heads/main'
+       uses: peaceiris/actions-gh-pages@v4
+       with:
+         github_token: ${{ secrets.GITHUB_TOKEN }}
+         publish_dir: ./dist
+      
