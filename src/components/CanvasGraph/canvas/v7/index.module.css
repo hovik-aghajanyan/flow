@@ -1,17 +1,36 @@
 .container {
-    border: 1px solid #ddd;
-    width: 800px;
-    height: 600px;
-    margin: 20px auto;
-    background-color: #f9f9f9;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    user-select: none;
     position: relative;
+    user-select: none;
 }
 
 .controls {
     position: absolute;
-    top: 0;
-    left: 0;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+}
+
+canvas {
+    display: block;
+}
+
+.contextMenu {
+    list-style: none;
+    margin: 0;
+    padding: 5px 0;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    color: black;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.contextMenu li {
+    padding: 6px 12px;
+    cursor: pointer;
+}
+
+.contextMenu li:hover {
+    background-color: #f0f0f0;
 }
