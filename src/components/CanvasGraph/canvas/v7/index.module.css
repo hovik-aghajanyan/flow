@@ -26,9 +26,19 @@ canvas {
     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
+
 .contextMenu li {
     padding: 6px 12px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.colorSquare {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
 }
 
 .contextMenu li:hover {

@@ -9,24 +9,20 @@ const INITIAL_HEIGHT = 600;
 const BIG_RADIUS = 30;
 const SMALL_RADIUS = 25;
 const ANIMATION_STEP = 0.05;
-// menu options constant
-const MENU_OPTIONS = [
-    "zero knowledge",
-    "beginner",
-    "intermediate",
-    "expert",
-    "not interested"
-];
+const COLOR_OPTIONS = ["#ff0077", "#00ff99", "#00aaff", "#ffff00"];
 
 export default function CanvasGraph() {
     const canvasRef = useRef(null);
     const [positions, setPositions] = useState({});
+    const withColor = n => ({ ...n, color: "#0ff", children: (n.children || []).map(withColor) });
+    const [graph, setGraph] = useState(() => graphData.map(withColor));
     const [selectedPath, setSelectedPath] = useState([]);
     const [expandedNodes, setExpandedNodes] = useState([]);
     const [animatingNodes, setAnimatingNodes] = useState([]);
     const [animationProgress, setAnimationProgress] = useState(1);
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
+    const [pulse, setPulse] = useState(0);
     const isDraggingRef = useRef(false);
     const lastMouseRef = useRef({ x: 0, y: 0 });
     const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, nodeId: null });
@@ -57,8 +53,8 @@ export default function CanvasGraph() {
             });
         }
 
-        graphData.forEach((node, i) => {
-            const x = INITIAL_WIDTH / 2 - ((graphData.length - 1) * topSpacing) / 2 + i * topSpacing;
+        graph.forEach((node, i) => {
+            const x = INITIAL_WIDTH / 2 - ((graph.length - 1) * topSpacing) / 2 + i * topSpacing;
             const y = 100;
             layout[node.id] = { x, y, node };
             if (expandedNodes.includes(node.id)) layoutChildren(node, x, y);
@@ -95,6 +91,16 @@ export default function CanvasGraph() {
         return () => document.removeEventListener("click", handleClickOutside);
     }, [contextMenu.visible]);
 
+    useEffect(() => {
+        let frame;
+        const animate = () => {
+            setPulse(p => (p + 0.02) % 1);
+            frame = requestAnimationFrame(animate);
+        };
+        frame = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(frame);
+    }, []);
+
     function handleMouseDown(e) {
         isDraggingRef.current = true;
         lastMouseRef.current = { x: e.clientX, y: e.clientY };
@@ -119,11 +125,30 @@ export default function CanvasGraph() {
         let foundId = null;
         Object.entries(positions).forEach(([id, { x, y }]) => {
             const r = selectedPath.includes(id) ? BIG_RADIUS : SMALL_RADIUS;
-            if (!foundId && (cx - x) ** 2 + (cy - y) ** 2 <= r * r) foundId = id;
+            const w = r * 2;
+            const h = r * 1.4;
+            if (!foundId && cx >= x - w / 2 && cx <= x + w / 2 && cy >= y - h / 2 && cy <= y + h / 2) foundId = id;
         });
         setContextMenu(foundId ? { visible: true, x: e.clientX, y: e.clientY, nodeId: foundId } : { visible: false, x: 0, y: 0, nodeId: null });
     }
-    function handleMenuClick(opt) { console.log("Node", contextMenu.nodeId, "skill:", opt); setContextMenu({ visible: false, x: 0, y: 0, nodeId: null }); }
+    function addChild(nodes, targetId, child) {
+        return nodes.map(n => {
+            if (n.id === targetId) {
+                return { ...n, children: [...(n.children || []), child] };
+            }
+            return n.children ? { ...n, children: addChild(n.children, targetId, child) } : n;
+        });
+    }
+
+    function handleMenuClick(color) {
+        const id = Date.now().toString();
+        const newNode = { id, label: "new node", color, children: [] };
+        setGraph(g => addChild(g, contextMenu.nodeId, newNode));
+        setExpandedNodes(e => (e.includes(contextMenu.nodeId) ? e : [...e, contextMenu.nodeId]));
+        setAnimatingNodes([id]);
+        setAnimationProgress(0);
+        setContextMenu({ visible: false, x: 0, y: 0, nodeId: null });
+    }
 
     // Touch pinch zoom
     function handleTouchStart(e) {
@@ -156,9 +181,11 @@ export default function CanvasGraph() {
         const cy = (e.clientY - rect.top - offset.y) / zoom;
         Object.entries(positions).forEach(([id,{ x,y }]) => {
             const r = selectedPath.includes(id)?BIG_RADIUS:SMALL_RADIUS;
-            if ((cx-x)**2+(cy-y)**2<=r*r) {
+            const w = r * 2;
+            const h = r * 1.4;
+            if (cx >= x - w/2 && cx <= x + w/2 && cy >= y - h/2 && cy <= y + h/2) {
                 if (expandedNodes.includes(id)) return;
-                const res = findNodeAndPath({ id, nodes: graphData });
+                const res = findNodeAndPath({ id, nodes: graph });
                 if (!res) return;
                 setSelectedPath(res.path);
                 setExpandedNodes(res.path);
@@ -184,22 +211,43 @@ export default function CanvasGraph() {
         });
         Object.entries(positions)
             .sort(([a],[b])=>selectedPath.includes(a)-selectedPath.includes(b))
-            .forEach(([id,{ node,x,y }])=> drawNode(ctx,{x,y,label:node.label,isSelected:selectedPath.includes(id)}, selectedPath.includes(id)?BIG_RADIUS:SMALL_RADIUS));
+            .forEach(([id,{ node,x,y }])=>
+                drawNode(
+                    ctx,
+                    { x, y, label: node.label, color: node.color, isSelected: selectedPath.includes(id) },
+                    selectedPath.includes(id) ? BIG_RADIUS : SMALL_RADIUS
+                )
+            );
         ctx.restore();
-    },[positions,selectedPath,zoom,offset]);
+    },[positions,selectedPath,zoom,offset,pulse]);
 
-    function drawNode(ctx,{ x,y,label,isSelected },radius) {
+    function drawNode(ctx,{ x,y,label,color,isSelected },radius) {
         const fontSize=12;
         const words=label.split(" ");
         const lines=[];
         let line=words[0]||"";
         for(let i=1;i<words.length;i++){ const test=`${line} ${words[i]}`; if(ctx.measureText(test).width>radius*1.8){ lines.push(line); line=words[i]; }else line=test; }
         lines.push(line);
-        ctx.save(); ctx.beginPath(); ctx.arc(x,y,radius,0,2*Math.PI);
-        ctx.fillStyle=isSelected?"#e67e22":"#3498db"; ctx.strokeStyle=isSelected?"#d35400":"#2980b9"; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
-        ctx.font=`bold ${fontSize}px Arial`; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.shadowColor="rgba(0,0,0,0.5)"; ctx.shadowBlur=4;
-        ctx.strokeStyle="black"; ctx.lineWidth=3;
-        lines.forEach((ln,i)=>{ const ty=y-((lines.length-1)*fontSize)/2+i*fontSize; ctx.strokeText(ln,x,ty); ctx.fillStyle="white"; ctx.fillText(ln,x,ty); });
+        const w = radius * 2;
+        const h = radius * 1.4;
+        const glow = 10 + 8 * Math.sin(pulse * 2 * Math.PI);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x - w / 2, y - h / 2, w, h);
+        ctx.fillStyle = "#111";
+        ctx.shadowColor = color;
+        ctx.shadowBlur = glow;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "white";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 3;
+        lines.forEach((ln,i)=>{ const ty=y-((lines.length-1)*fontSize)/2+i*fontSize; ctx.strokeText(ln,x,ty); ctx.fillText(ln,x,ty); });
         ctx.restore();
     }
     function drawLine(ctx,from,to,highlight=false){
@@ -233,8 +281,11 @@ export default function CanvasGraph() {
             <canvas ref={canvasRef} width={INITIAL_WIDTH} height={INITIAL_HEIGHT} onClick={handleClick} style={{ background: "#fff" }} />
             {contextMenu.visible && (
                 <ul className={styles.contextMenu} style={{ position: "absolute", top: contextMenu.y, left: contextMenu.x }}>
-                    {MENU_OPTIONS.map(opt => (
-                        <li key={opt} onClick={() => handleMenuClick(opt)}>{opt}</li>
+                    {COLOR_OPTIONS.map(c => (
+                        <li key={c} onClick={() => handleMenuClick(c)}>
+                            <span className={styles.colorSquare} style={{ background: c }} />
+                            {c}
+                        </li>
                     ))}
                 </ul>
             )}
